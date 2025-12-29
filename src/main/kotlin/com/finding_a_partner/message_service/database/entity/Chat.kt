@@ -9,7 +9,7 @@ import java.time.OffsetDateTime
 data class Chat(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    val id: Long? = null,
+    val id: Long = 0,
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)

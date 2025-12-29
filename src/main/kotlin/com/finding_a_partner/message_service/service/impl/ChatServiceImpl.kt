@@ -15,6 +15,7 @@ import com.finding_a_partner.message_service.model.request.ChatRequest
 import com.finding_a_partner.message_service.model.response.ChatDetailResponse
 import com.finding_a_partner.message_service.model.response.ChatResponse
 import com.finding_a_partner.message_service.service.ChatService
+import jakarta.transaction.Transactional
 import org.springframework.stereotype.Service
 
 @Service
@@ -32,8 +33,16 @@ class ChatServiceImpl(
     override fun getById(chatId: Long): ChatResponse =
         mapper.entityToResponse(dao.findById(chatId).orElseThrow { throw ResourceNotFoundException(chatId) })
 
-    override fun getEntityById(chatId: Long): Chat =
-        dao.findById(chatId).orElseThrow { throw ResourceNotFoundException(chatId) }
+    override fun getEntityById(chatId: Long): Chat {
+        val optionalChat = dao.findById(chatId)
+        if (optionalChat.isPresent) {
+            val chat = optionalChat.get()
+            return chat
+        } else {
+            println("[ChatServiceImpl] ERROR: Chat not found with id: $chatId")
+            throw ResourceNotFoundException(chatId)
+        }
+    }
 
     override fun getChatWithParticipantsById(chatId: Long): ChatDetailResponse {
         val chat = dao.findById(chatId).orElseThrow { throw ResourceNotFoundException(chatId) }
@@ -45,7 +54,7 @@ class ChatServiceImpl(
         }
 
         return ChatDetailResponse(
-            id = chat.id!!,
+            id = chat.id,
             type = chat.type,
             name = chat.name,
             createdAt = chat.createdAt,
@@ -91,8 +100,8 @@ class ChatServiceImpl(
                     participantType = ownerType,
                     role = ChatRole.OWNER,
                 )
-
                 participantDao.save(participant)
+
             }
             ChatType.EVENT -> {
                 var ownerId = userId
@@ -108,18 +117,16 @@ class ChatServiceImpl(
                     participantType = ownerType,
                     role = ChatRole.OWNER,
                 )
-
                 participantDao.save(participant)
             }
             ChatType.PRIVATE -> {
-                val participant = ChatParticipant(
+                val participant1 = ChatParticipant(
                     chat = chat,
                     participantId = userId,
                     participantType = ParticipantType.USER,
                     role = ChatRole.MEMBER,
                 )
-
-                participantDao.save(participant)
+                participantDao.save(participant1)
             }
         }
 
@@ -143,5 +150,76 @@ class ChatServiceImpl(
     override fun delete(id: Long) {
         val entity = dao.findById(id).orElseThrow { throw ResourceNotFoundException(id) }
         dao.delete(entity)
+    }
+
+    override fun getOrCreatePrivateChat(userId1: Long, userId2: Long): ChatResponse {
+        if (userId1 == userId2) {
+            throw IllegalArgumentException("Cannot create private chat with yourself")
+        }
+
+        val existingChat = participantDao.findPrivateChatBetweenUsers(
+            userId1, 
+            userId2, 
+            ParticipantType.USER
+        )
+        
+        if (existingChat != null) {
+            return mapper.entityToResponse(existingChat)
+        }
+
+        val chat = Chat(
+            type = ChatType.PRIVATE,
+            name = null,
+            eventId = null,
+        )
+        val savedChat = dao.save(chat)
+
+        val participant1 = ChatParticipant(
+            chat = savedChat,
+            participantId = userId1,
+            participantType = ParticipantType.USER,
+            role = ChatRole.MEMBER,
+        )
+        val participant2 = ChatParticipant(
+            chat = savedChat,
+            participantId = userId2,
+            participantType = ParticipantType.USER,
+            role = ChatRole.MEMBER,
+        )
+        
+        participantDao.save(participant1)
+        participantDao.save(participant2)
+
+        return mapper.entityToResponse(savedChat)
+    }
+
+    @Transactional
+    override fun getChatsByUserId(userId: Long): List<ChatResponse> {
+        try {
+            val participants = participantDao.findAllByParticipantIdAndParticipantTypeWithChat(
+                userId, 
+                ParticipantType.USER
+            )
+
+            val chats = participants
+                .map { it.chat }
+                .distinctBy { it.id }
+            
+            val result = chats.map { chat ->
+                try {
+                    mapper.entityToResponse(chat)
+                } catch (e: Exception) {
+                    println("[ChatServiceImpl] Error mapping chat ${chat.id}: ${e.message}")
+                    e.printStackTrace()
+                    throw e
+                }
+            }
+            
+            return result
+        } catch (e: Exception) {
+            println("[ChatServiceImpl] Error in getChatsByUserId: ${e.message}")
+            e.printStackTrace()
+            throw e
+        }
     }
 }

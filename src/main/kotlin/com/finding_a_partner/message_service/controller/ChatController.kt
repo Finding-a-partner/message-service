@@ -14,7 +14,6 @@ class ChatController(
     @GetMapping()
     fun getAll(): List<ChatResponse> = service.getAll()
 
-//    создать чат
     @PostMapping
     fun create(
         @RequestBody request: ChatRequest,
@@ -22,7 +21,6 @@ class ChatController(
     ): ChatResponse =
         service.create(userId, request)
 
-//    получить чат + участников
     @GetMapping("/{chatId}")
     fun getById(@PathVariable("chatId") chatId: Long): ChatDetailResponse =
         service.getChatWithParticipantsById(chatId)
@@ -35,4 +33,17 @@ class ChatController(
 
     @DeleteMapping("/{chatId}")
     fun delete(@PathVariable("chatId") chatId: Long) = service.delete(chatId)
+
+    @GetMapping("/private/{otherUserId}")
+    fun getOrCreatePrivateChat(
+        @PathVariable("otherUserId") otherUserId: Long,
+        @RequestHeader("X-User-Id") userId: Long,
+    ): ChatResponse =
+        service.getOrCreatePrivateChat(userId, otherUserId)
+
+    @GetMapping("/my")
+    fun getMyChats(
+        @RequestHeader("X-User-Id") userId: Long,
+    ): List<ChatResponse> =
+        service.getChatsByUserId(userId)
 }

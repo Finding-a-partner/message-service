@@ -13,4 +13,6 @@ interface ChatService {
     fun create(userId: Long, request: ChatRequest): ChatResponse
     fun update(id: Long, request: ChatRequest): ChatResponse
     fun delete(id: Long)
+    fun getOrCreatePrivateChat(userId1: Long, userId2: Long): ChatResponse
+    fun getChatsByUserId(userId: Long): List<ChatResponse>
 }
